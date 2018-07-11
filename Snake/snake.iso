@@ -1,0 +1,159 @@
+#include <SPI.h>
+#include <Adafruit_GFX.h>
+#include <Max72xxPanel.h>
+
+/* Основные настройки */
+int numberOfHorizontalDisplays = 1; // количество матриц по-горизонтали
+int numberOfVerticalDisplays = 1; // количество матриц по-вертикали
+Max72xxPanel matrix = Max72xxPanel(9, numberOfHorizontalDisplays, numberOfVerticalDisplays);
+unsigned long timing; // Переменная для millis.
+
+/* Настройки игры */
+int Time = 500; // Начальная скорость движения
+int count=3; //Начальная длинна змейки
+int snake[8][8]; // Массив точек игрового поля
+int go=1; // Направление движения: 1=вверх, 2=вправо, 3=вниз, 4=влево
+//Координаты новой точки
+int wayX;
+int wayY;
+
+void setup() {
+  /* Подключаем кнопки */
+  pinMode(A1, INPUT_PULLUP);
+  pinMode(A2, INPUT_PULLUP);
+  pinMode(A3, INPUT_PULLUP);
+  pinMode(A4, INPUT_PULLUP);
+  matrix.setIntensity(1); // яркость экрана от 0 до 15
+  StartSnake();
+}
+
+void(* resetFunc) (void) = 0;
+
+void StartSnake() {
+/* Начальное положение змейки */
+  snake[1][5] = 3;
+  snake[2][5] = 2;
+  snake[3][5] = 1;
+  Nyamka();
+  count=3;
+  go=1;
+}
+
+/* Создаем новую рандомную точку */
+void Nyamka () {
+  /* Получаем случайные координаты */
+  int nyamX = random(0,7);
+  int nyamY = random(0,7);
+  // Проверяем не занято ли поле, по этим координатам. Если занято - начинаем заново, если нет проставляем значение 99.
+  if (snake[nyamX][nyamY] != 0) {
+    Nyamka();
+    return;
+  }
+  else {
+    snake[nyamX][nyamY]=99;
+    matrix.drawPixel(nyamX, nyamY, HIGH);
+  }
+}
+
+/* Заполняем экран точками и перезапускаем игру */
+void endGame() {
+  for (int x=0;x<=7;x++) {
+    for (int y=0;y<=7;y++) {
+      snake[x][y]=0;
+      matrix.drawPixel(x, y, HIGH);
+      matrix.write();
+      delay(30); // Игра завершена, так что варварски используем delay(), уже можно)))
+    }
+  }
+  resetFunc(); // Начинаем заново
+}
+
+void loop() {
+  // Ловим нажатие кнопки, 1=нажато 2=не нажато
+  boolean RightB = !digitalRead(A1);
+  boolean UpB = !digitalRead(A2);
+  boolean LeftB = !digitalRead(A3);
+  boolean DownB = !digitalRead(A4);
+
+  //Определяем куда ползем. При этом проверяем куда хотим, в противоположную сторону нельзя
+  if (UpB == 1 && abs(go) !=10){
+    go=-10;
+  }
+    if (RightB == 1 && abs(go) !=1){
+    go=1;
+  }
+    if (DownB == 1 && abs(go) !=10){
+    go=10;
+  }
+    if (LeftB == 1 && abs(go) !=1){
+    go=-1;
+  }
+
+
+ if (millis()-timing > Time) {
+  timing=millis();
+
+// Первый цикл, нам нужно определить куда ползет змейка.
+for (int x=0;x<=7;x++) {
+  for (int y=0;y<=7;y++) {
+    // Если это первая точка, то определяем новое направление
+    if(snake[x][y] == 1) {
+      //Если направление по вертикали
+      if (abs(go) == 10) {
+        wayY = y+go/10;    
+        if (wayY < 0) {
+          wayY = 7;
+        }
+        if (wayY > 7) {
+          wayY = 0;
+        }
+        wayX = x;
+      } 
+      // Если по горизонтали
+      else {
+        wayX = x+go;    
+         if (wayX < 0) {
+          wayX = 7;
+        }
+        if (wayX > 7) {
+          wayX = 0;
+        }
+        wayY = y;
+      } 
+    }
+  }
+}
+// Теперь мы знаем гуда ползет змейка, проверим, не захавает ли она при этом нямку? Если змейка нашла нямку, хвалим змейку и делаем новую нямку)))
+if (snake[wayX][wayY] == 99) {
+  count++;
+  Nyamka();
+  Time-=10; // ускоряем змейку
+}
+
+// Но вот если змейка врезалась в свой хвост, то змейка не довольна)))
+if (snake[wayX][wayY]!=99 && snake[wayX][wayY]!=0) {
+  endGame();
+}
+
+// Перерисовываем змейку 
+for (int x=0;x<=7;x++) {
+  for (int y=0;y<=7;y++) {
+
+    // Если это последняя точка стираем её
+    if (snake[x][y] == count){
+      snake[x][y]=0;
+      matrix.drawPixel(x, y, LOW);
+    }
+    // Если это не первая и не последняя прибаляем 1  
+    if (snake[x][y]!=0 && snake[x][y] < count) {
+      snake[x][y]++;
+      matrix.drawPixel(x, y, HIGH);
+    } 
+  }
+}
+// Теперь рисуем голову змейки
+snake[wayX][wayY]=1;
+matrix.drawPixel(wayX, wayY, HIGH);
+matrix.write();
+  }
+ }
